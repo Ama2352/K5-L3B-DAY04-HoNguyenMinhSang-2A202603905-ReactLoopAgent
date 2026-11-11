@@ -9,6 +9,7 @@ CONFIG = {
     'openai': ('OPENAI_API_KEY', 'https://api.openai.com/v1/chat/completions'),
     'gemini': ('GEMINI_API_KEY', 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions'),
     'openrouter': ('OPENROUTER_API_KEY', 'https://openrouter.ai/api/v1/chat/completions'),
+    'groq': ('GROQ_API_KEY', 'https://api.groq.com/openai/v1/chat/completions'),
     'opencode-go': ('OPENCODE_GO_API_KEY', 'https://opencode.ai/inference/go/openai/v1/chat/completions'),
     'anthropic': ('ANTHROPIC_API_KEY', 'https://api.anthropic.com/v1/messages'),
 }
@@ -49,9 +50,21 @@ class Provider:
         if self.name == 'anthropic':
             return self._anthropic(messages, schemas)
         payload = {'model': self.model, 'messages': messages}
+        if self.name == 'groq' and os.getenv('GROQ_MAX_COMPLETION_TOKENS'):
+            try:
+                limit = int(os.environ['GROQ_MAX_COMPLETION_TOKENS'])
+                if limit < 1:
+                    raise ValueError
+            except ValueError:
+                raise ValueError('GROQ_MAX_COMPLETION_TOKENS must be an integer >= 1') from None
+            payload['max_completion_tokens'] = limit
+        if self.name == 'groq' and os.getenv('GROQ_REASONING_EFFORT'):
+            payload['reasoning_effort'] = os.environ['GROQ_REASONING_EFFORT']
         if schemas:
             payload['tools'] = schemas
         headers = {'Authorization': f'Bearer {self.key}'}
+        if self.name == 'groq':
+            headers['User-Agent'] = 'StatusAgentLab/1.0'
         if self.name == 'opencode-go':
             headers.update({'User-Agent': 'StatusAgentLab/1.0', 'x-opencode-session': self.session_id})
         data = post_json(self.url, headers, payload)
